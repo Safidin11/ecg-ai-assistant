@@ -29,6 +29,16 @@
       text-align: center;
       color: #555;
     }
+    button {
+      font-size: 1rem;
+      padding: 8px 20px;
+      border: none;
+      border-radius: 6px;
+      background: #2563eb;
+      color: white;
+      cursor: pointer;
+    }
+    button:disabled { background: #9db8f0; cursor: not-allowed; }
     .result {
       margin-top: 24px;
       padding: 16px;
@@ -36,11 +46,14 @@
       background: #f5f5f5;
       display: none;
     }
-    footer {
-      margin-top: 40px;
-      font-size: 0.8rem;
-      color: #888;
-    }
+    .bar-row { display: flex; align-items: center; margin: 6px 0; gap: 8px; }
+    .bar-label { width: 190px; font-size: 0.9rem; }
+    .bar-track { flex: 1; background: #e0e0e0; border-radius: 4px; height: 16px; }
+    .bar-fill { background: #2563eb; height: 16px; border-radius: 4px; }
+    .bar-value { width: 52px; text-align: right; font-variant-numeric: tabular-nums; font-size: 0.85rem; }
+    .top-diagnosis { font-size: 1.1rem; font-weight: 600; margin-bottom: 12px; }
+    .error { color: #b91c1c; margin-top: 12px; }
+    footer { margin-top: 40px; font-size: 0.8rem; color: #888; }
   </style>
 </head>
 <body>
@@ -57,16 +70,94 @@
   <div class="upload-box">
     <p>Загрузите изображение ЭКГ (jpg, png, pdf)</p>
     <input type="file" id="ecg-file" accept="image/*,application/pdf" />
-    <p><button id="upload-btn" disabled>Отправить на распознавание (пока не реализовано)</button></p>
+    <p><button id="upload-btn" disabled>Отправить на распознавание</button></p>
   </div>
 
   <div class="result" id="result">
     <h2>Результат</h2>
-    <p>Здесь будет отображаться распознанный сигнал и вероятности диагнозов.</p>
+    <div class="top-diagnosis" id="top-diagnosis"></div>
+    <div id="bars"></div>
+    <p id="meta" style="font-size:0.8rem;color:#666;"></p>
   </div>
+
+  <div class="error" id="error"></div>
 
   <footer>
     ECG AI Assistant · учебный проект · версия 0.1.0
   </footer>
+
+  <script>
+    // Человекочитаемые названия классов диагнозов (совпадают с бэкендом).
+    const DIAGNOSIS_LABELS = {
+      NORM: "Норма",
+      MI: "Инфаркт миокарда",
+      STTC: "Изменения ST/T",
+      CD: "Нарушение проводимости",
+      HYP: "Гипертрофия",
+    };
+
+    const fileInput = document.getElementById("ecg-file");
+    const uploadBtn = document.getElementById("upload-btn");
+    const resultBox = document.getElementById("result");
+    const errorBox = document.getElementById("error");
+
+    // Кнопка активна только когда выбран файл.
+    fileInput.addEventListener("change", () => {
+      uploadBtn.disabled = !fileInput.files.length;
+    });
+
+    uploadBtn.addEventListener("click", async () => {
+      errorBox.textContent = "";
+      resultBox.style.display = "none";
+      uploadBtn.disabled = true;
+      uploadBtn.textContent = "Обрабатываем…";
+
+      try {
+        const formData = new FormData();
+        formData.append("file", fileInput.files[0]);
+
+        const resp = await fetch("/recordings", { method: "POST", body: formData });
+        if (!resp.ok) {
+          throw new Error("Сервер вернул ошибку " + resp.status);
+        }
+        const data = await resp.json();
+        renderResult(data);
+      } catch (e) {
+        errorBox.textContent = "Ошибка: " + e.message;
+      } finally {
+        uploadBtn.disabled = false;
+        uploadBtn.textContent = "Отправить на распознавание";
+      }
+    });
+
+    function renderResult(data) {
+      const pred = data.prediction;
+      const rec = data.recording;
+
+      const topLabel = DIAGNOSIS_LABELS[pred.diagnosis] || pred.diagnosis;
+      document.getElementById("top-diagnosis").textContent =
+        "Наиболее вероятно: " + topLabel;
+
+      // Сортируем вероятности по убыванию и рисуем полоски.
+      const entries = Object.entries(pred.probabilities).sort((a, b) => b[1] - a[1]);
+      const bars = entries.map(([code, prob]) => {
+        const label = DIAGNOSIS_LABELS[code] || code;
+        const pct = (prob * 100).toFixed(1);
+        return `
+          <div class="bar-row">
+            <div class="bar-label">${label}</div>
+            <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
+            <div class="bar-value">${pct}%</div>
+          </div>`;
+      }).join("");
+      document.getElementById("bars").innerHTML = bars;
+
+      document.getElementById("meta").textContent =
+        `Модель: ${pred.model_version} · запись #${rec.id} · ` +
+        `${rec.sampling_rate} Гц · ${rec.duration} c`;
+
+      resultBox.style.display = "block";
+    }
+  </script>
 </body>
 </html>

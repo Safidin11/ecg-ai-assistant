@@ -80,6 +80,11 @@ class LayoutMap:
     def leads_found(self) -> list[str]:
         return sorted({c.lead for c in self.cells})
 
+    @property
+    def coverage(self) -> float:
+        """Доля из 12 отведений, которые удалось разместить (0..1)."""
+        return len({c.lead for c in self.cells}) / 12.0
+
     def to_dict(self) -> dict:
         return {
             "source": self.source,
@@ -87,6 +92,7 @@ class LayoutMap:
             "n_cols": self.n_cols,
             "total_seconds": self.total_seconds,
             "leads_found": self.leads_found,
+            "coverage": round(self.coverage, 3),
             "cells": [c.to_dict() for c in self.cells],
             "unmatched_texts": [d.text for d in self.unmatched],
         }

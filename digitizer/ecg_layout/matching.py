@@ -25,7 +25,9 @@ for _lead in CANONICAL_LEADS:
     _NORM_TO_CANON[_normalize(_lead)] = _lead
 
 # Частые путаницы OCR для V-отведений (буква вместо цифры).
-_V_CONFUSIONS = {"I": "1", "L": "1", "O": "0", "S": "5", "B": "8", "Z": "2", "G": "6"}
+# Важно: НЕ включаем "L"->"1" — заглавная L не похожа на 1 и конфликтует с aVL
+# (испорченное "aVL" -> "VL" ошибочно стало бы "V1").
+_V_CONFUSIONS = {"I": "1", "O": "0", "S": "5", "B": "8", "Z": "2", "G": "6"}
 for _n in range(1, 7):
     for _bad, _good in _V_CONFUSIONS.items():
         if _good == str(_n):

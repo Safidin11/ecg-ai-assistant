@@ -51,6 +51,18 @@ def available_templates() -> list[str]:
     return list(LAYOUT_TEMPLATES.keys())
 
 
+def template_grid_dims(name: str) -> tuple[int, int]:
+    """(число строк сетки, число колонок) для шаблона (без ритм-полос)."""
+    grid = LAYOUT_TEMPLATES[name]["grid"]
+    return len(grid), max(len(r) for r in grid)
+
+
+def template_cell_map(name: str) -> dict[tuple[int, int], str]:
+    """Отображение (строка, колонка) -> отведение для сетки шаблона."""
+    grid = LAYOUT_TEMPLATES[name]["grid"]
+    return {(r, c): lead for r, leads in enumerate(grid) for c, lead in enumerate(leads)}
+
+
 def build_layout_from_template(
     name: str,
     image_w: float,

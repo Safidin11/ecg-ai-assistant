@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import json
 
+from ecg_layout.complete import complete_layout
 from ecg_layout.infer import infer_layout
 from ecg_layout.matching import match_text_to_lead
 from ecg_layout.ocr import OCRBackend
@@ -30,12 +31,16 @@ def detect_layout(
     image_size: tuple[int, int] | None = None,
     fallback_template: str = "standard_3x4",
     min_leads: int = 8,
+    complete: bool = True,
 ) -> LayoutMap:
     """Полный проход: OCR -> отбор подписей -> инференс раскладки.
 
     Если OCR прочитал < min_leads отведений (подписей нет/плохо распознались),
     откатываемся на известную раскладку fallback_template. В обоих случаях в
     поле layout.source видно, откуда взялся результат.
+
+    complete=True: если прочитанная раскладка совпала со стандартной, пропущенные
+    отведения достраиваются по шаблону (помечаются inferred=True).
     """
     detections = ocr.detect(image_path)
 
@@ -69,6 +74,8 @@ def detect_layout(
         layout.source = "ocr"
         layout.unmatched = unmatched
         layout.ocr_matched_leads = ocr_matched
+        if complete:
+            layout = complete_layout(layout, width, height)
         return layout
 
     # Иначе — запасной вариант: известный шаблон (но что прочитал OCR — сохраняем).
@@ -86,7 +93,12 @@ def draw_overlay(image_path: str, layout: LayoutMap, out_path: str) -> None:
     draw = ImageDraw.Draw(im)
     for cell in layout.cells:
         x, y, w, h = cell.bbox
-        color = (220, 40, 40) if cell.is_rhythm else (30, 110, 230)
+        if cell.inferred:
+            color = (20, 160, 60)      # зелёный — достроено по шаблону
+        elif cell.is_rhythm:
+            color = (220, 40, 40)      # красный — ритм-полоса
+        else:
+            color = (30, 110, 230)     # синий — прочитано OCR
         draw.rectangle([x, y, x + w, y + h], outline=color, width=3)
         tag = f"{cell.lead} @{cell.time_offset_s:.1f}s"
         draw.text((x, max(0, y - 12)), tag, fill=color)
@@ -120,6 +132,9 @@ def main() -> None:
     n_ocr = len(layout.ocr_matched_leads)
     print(f"OCR реально прочитал: {', '.join(layout.ocr_matched_leads) or '—'} ({n_ocr}/12)")
     print(f"Раскладка: {layout.n_rows} строк x {layout.n_cols} колонок")
+    inferred = sorted({c.lead for c in layout.cells if c.inferred})
+    if inferred:
+        print(f"Достроено по шаблону: {', '.join(inferred)}")
     print(f"Итоговые отведения: {', '.join(layout.leads_found) or '—'}")
     if layout.unmatched:
         print(f"Не распознано как отведения: {[d.text for d in layout.unmatched]}")

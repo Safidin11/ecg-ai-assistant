@@ -51,6 +51,7 @@ class LeadCell:
     duration_s: float            # сколько секунд длится этот кусок
     is_rhythm: bool = False      # True для полноширинной ритм-полосы
     conf: float = 1.0
+    inferred: bool = False       # True — отведение не прочитано, а достроено по раскладке
 
     def to_dict(self) -> dict:
         return {
@@ -62,6 +63,7 @@ class LeadCell:
             "duration_s": round(self.duration_s, 3),
             "is_rhythm": self.is_rhythm,
             "conf": round(self.conf, 3),
+            "inferred": self.inferred,
         }
 
 

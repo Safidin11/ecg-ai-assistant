@@ -74,6 +74,7 @@ class LayoutMap:
     total_seconds: float
     cells: list[LeadCell] = field(default_factory=list)
     unmatched: list[TextDetection] = field(default_factory=list)
+    source: str = "ocr"  # откуда раскладка: "ocr" (прочитана) или "template:<имя>"
 
     @property
     def leads_found(self) -> list[str]:
@@ -81,6 +82,7 @@ class LayoutMap:
 
     def to_dict(self) -> dict:
         return {
+            "source": self.source,
             "n_rows": self.n_rows,
             "n_cols": self.n_cols,
             "total_seconds": self.total_seconds,

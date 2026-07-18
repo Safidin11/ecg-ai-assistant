@@ -1,0 +1,50 @@
+# --- Данные и датасеты ---
+data/
+*.dat
+*.hea
+*.wav
+
+# --- Веса моделей ---
+*.pth
+*.pt
+*.h5
+*.ckpt
+*.onnx
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# --- Виртуальные окружения ---
+.venv/
+venv/
+env/
+
+# --- База данных ---
+*.db
+*.sqlite
+*.sqlite3
+
+# --- Секреты / конфиг ---
+.env
+.env.*
+!.env.example
+
+# --- IDE / ОС ---
+.vscode/
+.idea/
+.DS_Store
+
+# --- Логи ---
+*.log
+
+# --- Jupyter ---
+.ipynb_checkpoints/

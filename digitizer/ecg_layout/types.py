@@ -57,7 +57,7 @@ class LeadCell:
             "lead": self.lead,
             "row": self.row,
             "col": self.col,
-            "bbox": list(self.bbox),
+            "bbox": [float(v) for v in self.bbox],
             "time_offset_s": round(self.time_offset_s, 3),
             "duration_s": round(self.duration_s, 3),
             "is_rhythm": self.is_rhythm,
@@ -75,6 +75,7 @@ class LayoutMap:
     cells: list[LeadCell] = field(default_factory=list)
     unmatched: list[TextDetection] = field(default_factory=list)
     source: str = "ocr"  # откуда раскладка: "ocr" (прочитана) или "template:<имя>"
+    ocr_matched_leads: list[str] = field(default_factory=list)  # что реально прочитал OCR
 
     @property
     def leads_found(self) -> list[str]:
@@ -88,6 +89,7 @@ class LayoutMap:
     def to_dict(self) -> dict:
         return {
             "source": self.source,
+            "ocr_matched_leads": sorted(set(self.ocr_matched_leads)),
             "n_rows": self.n_rows,
             "n_cols": self.n_cols,
             "total_seconds": self.total_seconds,

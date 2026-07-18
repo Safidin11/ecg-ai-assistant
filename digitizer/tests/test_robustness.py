@@ -92,3 +92,25 @@ def test_matching_no_longer_confuses_avl_with_v1():
     # испорченное "aVL" -> "VL" не должно ошибочно стать V1
     lead, _ = match_text_to_lead("VL")
     assert lead != "V1"
+
+
+def test_missing_left_column_still_4_cols():
+    # OCR не прочитал весь левый столбец (I, II, III). Раскладка должна
+    # остаться 4-колоночной, а aVR — попасть в колонку 1 (t=2.5..5), не 0.
+    labels = _grid_labels(drop={"I", "II", "III"})
+    layout = infer_layout(labels, 1200, 1000)
+    assert layout.n_cols == 4
+    avr = [c for c in layout.cells if c.lead == "aVR"][0]
+    assert avr.col == 1
+    assert abs(avr.time_offset_s - 2.5) < 1e-6
+    v4 = [c for c in layout.cells if c.lead == "V4"][0]
+    assert v4.col == 3
+    assert abs(v4.time_offset_s - 7.5) < 1e-6
+
+
+def test_matching_recovers_augmented_leads_with_broken_a():
+    # реальные ошибки OCR на фигурной строчной "a" (см. img11.jpg)
+    assert match_text_to_lead("oVL")[0] == "aVL"
+    assert match_text_to_lead("GVF")[0] == "aVF"
+    assert match_text_to_lead("oVR")[0] == "aVR"
+    assert match_text_to_lead("0VF")[0] == "aVF"

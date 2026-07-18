@@ -38,6 +38,12 @@ _CANON_KEYS = list(_NORM_TO_CANON.keys())
 # Порог похожести (0..100). Ниже — считаем, что это не подпись отведения.
 _MATCH_CUTOFF = 82.0
 
+# Паттерн augmented-отведений: aVR / aVL / aVF. На реальных ЭКГ фигурная
+# строчная «a» часто читается OCR как o/G/W/α и т.п. Но различающая информация —
+# в хвосте: V + R/L/F. Поэтому 3-символьный токен вида "?V[RLF]" уверенно
+# относим к нужному отведению (напр. "oVL"->aVL, "GVF"->aVF).
+_AUG_SUFFIX = {"VR": "aVR", "VL": "aVL", "VF": "aVF"}
+
 
 def match_text_to_lead(text: str) -> tuple[str | None, float]:
     """Пытается распознать текст как отведение.
@@ -52,6 +58,10 @@ def match_text_to_lead(text: str) -> tuple[str | None, float]:
     # Точное совпадение (быстрый и самый надёжный путь).
     if norm in _NORM_TO_CANON:
         return _NORM_TO_CANON[norm], 100.0
+
+    # Augmented-отведение по хвосту "V[RLF]" при испорченной первой букве.
+    if len(norm) == 3 and norm[1] == "V" and norm[2] in "RLF":
+        return _AUG_SUFFIX[norm[1:]], 90.0
 
     # Иначе — ближайшее по расстоянию редактирования из закрытого словаря.
     best = process.extractOne(norm, _CANON_KEYS, scorer=fuzz.ratio)

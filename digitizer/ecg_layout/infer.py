@@ -76,6 +76,45 @@ def _dedup_labels(labels: list[LeadLabel], dedup_tol: float) -> list[LeadLabel]:
     return kept
 
 
+# Стандартные варианты числа колонок у 12-канальной ЭКГ:
+# 4 (раскладка 3x4), 2 (6x2), 1 (12x1). Три колонки и т.п. почти всегда
+# означают ошибку детекции (например, не прочитан целый крайний столбец).
+_STANDARD_NCOLS = (4, 2, 1)
+
+
+def _fit_standard_columns(
+    centers: list[float], image_w: float
+) -> tuple[int, list[int]]:
+    """Привязывает найденные колонки к ближайшей стандартной сетке (1/2/4).
+
+    centers — X-центры найденных колонок (по возрастанию). Возвращает
+    (число_колонок, соответствие[индекс_найденной_колонки -> индекс_в_сетке]).
+
+    Зачем: если OCR не прочитал целый крайний столбец, «наивно» колонок
+    окажется меньше и время у всех сдвинется. Привязка к стандартной сетке
+    ставит прочитанные колонки на их истинные места (пустые столбцы просто
+    остаются без подписей).
+    """
+    m = len(centers)
+    best_key = None
+    best_n, best_assign = m, list(range(m))
+    for n in _STANDARD_NCOLS:
+        if m > n:
+            continue
+        # «якоря» — точка примерно в 15% ширины клетки от её левого края
+        # (подписи на ЭКГ выровнены влево, а не по центру клетки).
+        anchors = [(i + 0.15) * image_w / n for i in range(n)]
+        assign = [min(range(n), key=lambda j: abs(cx - anchors[j])) for cx in centers]
+        if len(set(assign)) != m or assign != sorted(assign):
+            continue  # колонки наложились/перепутались — эта сетка не подходит
+        residual = sum(abs(centers[k] - anchors[assign[k]]) for k in range(m)) / (image_w / n)
+        coverage = m / n
+        key = (coverage, -residual, -n)  # больше покрытие, меньше ошибка, меньше колонок
+        if best_key is None or key > best_key:
+            best_key, best_n, best_assign = key, n, assign
+    return best_n, best_assign
+
+
 def infer_layout(
     labels: list[LeadLabel],
     image_w: float,
@@ -103,10 +142,18 @@ def infer_layout(
     row_ids = cluster_1d([lb.cy for lb in labels], tol=row_tol)
     n_rows = max(row_ids) + 1
 
-    # 2. Колонки по X — ГЛОБАЛЬНО по всем подписям (а не внутри строки).
+    # 2. Колонки по X — ГЛОБАЛЬНО по всем подписям (а не внутри строки),
+    #    затем привязка к стандартной сетке (1/2/4), чтобы пропажа целого
+    #    столбца не сдвигала время.
     col_tol = max(2.0 * med_w, 0.02 * image_w, 1.0)
-    col_ids = cluster_1d([lb.cx for lb in labels], tol=col_tol)
-    n_cols_main = max(col_ids) + 1
+    raw_col_ids = cluster_1d([lb.cx for lb in labels], tol=col_tol)
+    n_raw_cols = max(raw_col_ids) + 1
+    raw_centers = [
+        statistics.mean([lb.cx for lb, c in zip(labels, raw_col_ids) if c == cid])
+        for cid in range(n_raw_cols)
+    ]
+    n_cols_main, cluster_to_col = _fit_standard_columns(raw_centers, image_w)
+    col_ids = [cluster_to_col[c] for c in raw_col_ids]
 
     # раскладываем подписи по строкам
     rows: list[list[tuple[LeadLabel, int]]] = [[] for _ in range(n_rows)]
@@ -115,22 +162,21 @@ def infer_layout(
     for row in rows:
         row.sort(key=lambda pair: pair[0].cx)
 
-    # 3. Какие строки «полные» (число подписей == числу колонок) — это сетка.
-    full_row_ids = [r for r, row in enumerate(rows) if len(row) == n_cols_main]
-    max_full = max(full_row_ids) if full_row_ids else -1
+    # 3. Ритм-полоса: строка ниже всей основной сетки, разреженная. Основная
+    #    сетка — строки, где подписей >= 2. (Не завязываемся на «полную» строку,
+    #    т.к. при пропаже столбца полных строк может не быть вовсе.)
+    multi_rows = [r for r, row in enumerate(rows) if len(row) >= 2]
+    last_multi = max(multi_rows) if multi_rows else -1
     rhythm_threshold = max(1, n_cols_main // 3)
 
     seg = total_seconds / n_cols_main  # длительность одной колонки, сек
 
     cells: list[LeadCell] = []
     for r_idx, row in enumerate(rows):
-        # Ритм-полоса: только если есть колонки (>=2), строка разрежена И
-        # находится НИЖЕ всей основной сетки. Разреженная строка вверху/в
-        # середине — это не ритм, а строка с пропущенной подписью.
         is_rhythm_row = (
             n_cols_main >= 2
-            and len(full_row_ids) > 0
-            and r_idx > max_full
+            and len(multi_rows) > 0
+            and r_idx > last_multi
             and len(row) <= rhythm_threshold
         )
         for lb, cid in row:

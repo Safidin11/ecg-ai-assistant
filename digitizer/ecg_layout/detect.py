@@ -62,16 +62,19 @@ def detect_layout(
     width, height = image_size
 
     layout = infer_layout(labels, image_w=width, image_h=height, total_seconds=total_seconds)
+    ocr_matched = sorted({lb.lead for lb in labels})
 
     # Достаточно ли уверенно прочитали подписи?
     if len(layout.leads_found) >= min_leads:
         layout.source = "ocr"
         layout.unmatched = unmatched
+        layout.ocr_matched_leads = ocr_matched
         return layout
 
-    # Иначе — запасной вариант: известный шаблон.
+    # Иначе — запасной вариант: известный шаблон (но что прочитал OCR — сохраняем).
     fallback = build_layout_from_template(fallback_template, width, height, total_seconds)
     fallback.unmatched = unmatched
+    fallback.ocr_matched_leads = ocr_matched
     return fallback
 
 
@@ -114,8 +117,10 @@ def main() -> None:
     )
 
     print(f"Источник раскладки: {layout.source}")
+    n_ocr = len(layout.ocr_matched_leads)
+    print(f"OCR реально прочитал: {', '.join(layout.ocr_matched_leads) or '—'} ({n_ocr}/12)")
     print(f"Раскладка: {layout.n_rows} строк x {layout.n_cols} колонок")
-    print(f"Найдено отведений: {', '.join(layout.leads_found) or '—'}")
+    print(f"Итоговые отведения: {', '.join(layout.leads_found) or '—'}")
     if layout.unmatched:
         print(f"Не распознано как отведения: {[d.text for d in layout.unmatched]}")
     print()

@@ -49,8 +49,8 @@ class EasyOCRBackend:
         results = self._reader.readtext(image_path)
         detections: list[TextDetection] = []
         for box, text, conf in results:
-            xs = [p[0] for p in box]
-            ys = [p[1] for p in box]
+            xs = [float(p[0]) for p in box]
+            ys = [float(p[1]) for p in box]
             x, y = min(xs), min(ys)
             w, h = max(xs) - x, max(ys) - y
             detections.append(

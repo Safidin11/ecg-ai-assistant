@@ -7,16 +7,22 @@ from app.db.base import Base
 
 
 class Recording(Base):
-    """Одна загруженная ЭКГ: исходное изображение + оцифрованный сигнал"""
+    """Одна оцифрованная ЭКГ: сигнал + параметры записи.
+
+    Изображение в БД НЕ хранится — сохраняется только цифровой сигнал (файлом,
+    путь в signal_path) и метаданные (частота, скорость, усиление, формат).
+    """
 
     __tablename__ = "recordings"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    image_path: Mapped[str] = mapped_column(String, nullable=False)
     signal_path: Mapped[str] = mapped_column(String, nullable=False)
     sampling_rate: Mapped[int] = mapped_column(Integer, nullable=False)
+    speed: Mapped[int] = mapped_column(Integer, nullable=False)      # мм/с
+    gain: Mapped[int] = mapped_column(Integer, nullable=False)       # мм/мВ
+    layout: Mapped[str] = mapped_column(String, nullable=False)      # 3x4 / 6x2 / 12x1
     duration: Mapped[float] = mapped_column(Float, nullable=False)
 
     quality_score: Mapped[float | None] = mapped_column(Float, nullable=True)

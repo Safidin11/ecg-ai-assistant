@@ -16,27 +16,42 @@ router = APIRouter(prefix="/recordings", tags=["recordings"])
 
 @router.post("", response_model=UploadResponse, status_code=201)
 def upload_recording(
-    file: UploadFile = File(..., description="Изображение ЭКГ (jpg/png/pdf)"),
+    file: UploadFile = File(..., description="Фотография ЭКГ (jpg/png)"),
+    layout: str = Form(default="3x4", description="Формат: 3x4 / 6x2 / 12x1"),
+    speed: int = Form(default=25, description="Скорость записи, мм/с (25 или 50)"),
+    gain: int = Form(default=10, description="Усиление, мм/мВ (5, 10 или 20)"),
+    sampling_rate: int = Form(default=500),
     notes: str | None = Form(default=None),
     db: Session = Depends(get_db),
 ) -> UploadResponse:
-    """Загрузить изображение ЭКГ и прогнать его через весь пайплайн.
+    """Загрузить фото ЭКГ с параметрами и прогнать через полный пайплайн.
 
-    Возвращает созданную запись и предсказание модели.
+    Возвращает запись (сигнал+метаданные), диагноз, уверенность и URL заново
+    отрисованной чистой ЭКГ.
     """
     image_bytes = file.file.read()
     if not image_bytes:
         raise HTTPException(status_code=400, detail="Пустой файл")
 
-    recording, prediction = pipeline.process_upload(
-        db=db,
-        image_bytes=image_bytes,
-        filename=file.filename or "upload.bin",
-        notes=notes,
-    )
+    try:
+        result = pipeline.process_upload(
+            db=db,
+            image_bytes=image_bytes,
+            filename=file.filename or "upload.bin",
+            layout=layout,
+            speed=speed,
+            gain=gain,
+            sampling_rate=sampling_rate,
+            notes=notes,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
     return UploadResponse(
-        recording=RecordingRead.model_validate(recording),
-        prediction=PredictionRead.model_validate(prediction),
+        recording=RecordingRead.model_validate(result.recording),
+        prediction=PredictionRead.model_validate(result.prediction),
+        render_url=f"/renders/{result.render_filename}",
+        confidence=result.confidence,
     )
 
 

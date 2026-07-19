@@ -4,9 +4,11 @@ from pydantic import BaseModel, ConfigDict
 
 
 class RecordingBase(BaseModel):
-    image_path: str
     signal_path: str
     sampling_rate: int
+    speed: int
+    gain: int
+    layout: str
     duration: float
     quality_score: float | None = None
     notes: str | None = None

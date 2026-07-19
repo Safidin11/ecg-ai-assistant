@@ -8,7 +8,7 @@ class Settings(BaseSettings):
 
     database_url: str = "sqlite:///./data/app.db"
     signals_storage_path: str = "./data/signals"
-    images_storage_path: str = "./data/images"
+    renders_storage_path: str = "./data/renders"
     app_env: str = "development"
 
 

@@ -32,8 +32,8 @@ app.include_router(recordings_router)
 @app.on_event("startup")
 def on_startup() -> None:
     # создаём папки под данные, чтобы сохранение файлов не падало
-    Path(settings.images_storage_path).mkdir(parents=True, exist_ok=True)
     Path(settings.signals_storage_path).mkdir(parents=True, exist_ok=True)
+    Path(settings.renders_storage_path).mkdir(parents=True, exist_ok=True)
     db_path = settings.database_url.replace("sqlite:///", "")
     if db_path and db_path != settings.database_url:
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
@@ -45,6 +45,10 @@ def on_startup() -> None:
 def health() -> dict:
     return {"status": "ok"}
 
+
+# Отдаём отрисованные чистые ЭКГ по адресу /renders/<файл>.
+Path(settings.renders_storage_path).mkdir(parents=True, exist_ok=True)
+app.mount("/renders", StaticFiles(directory=settings.renders_storage_path), name="renders")
 
 # Отдаём фронтенд (frontend/index.html) прямо из приложения по адресу "/".
 # Монтируем ПОСЛЕ API-роутов, чтобы /health и /recordings имели приоритет.

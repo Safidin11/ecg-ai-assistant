@@ -3,159 +3,130 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ECG AI Assistant — загрузка ЭКГ</title>
+  <title>ECG AI Assistant — оцифровка ЭКГ</title>
   <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
-      max-width: 640px;
-      margin: 40px auto;
-      padding: 0 16px;
-      color: #1a1a1a;
-      line-height: 1.5;
-    }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+      max-width: 760px; margin: 32px auto; padding: 0 16px; color: #1a1a1a; line-height: 1.5; }
     h1 { font-size: 1.4rem; }
-    .disclaimer {
-      background: #fff3cd;
-      border: 1px solid #ffe08a;
-      border-radius: 8px;
-      padding: 12px 16px;
-      margin-bottom: 24px;
-      font-size: 0.95rem;
-    }
-    .upload-box {
-      border: 2px dashed #bbb;
-      border-radius: 8px;
-      padding: 32px;
-      text-align: center;
-      color: #555;
-    }
-    button {
-      font-size: 1rem;
-      padding: 8px 20px;
-      border: none;
-      border-radius: 6px;
-      background: #2563eb;
-      color: white;
-      cursor: pointer;
-    }
+    .disclaimer { background: #fff3cd; border: 1px solid #ffe08a; border-radius: 8px;
+      padding: 12px 16px; margin-bottom: 20px; font-size: 0.9rem; }
+    .card { border: 1px solid #e2e2e2; border-radius: 10px; padding: 18px; margin-bottom: 18px; }
+    .params { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 12px 0; }
+    label { display: block; font-size: 0.82rem; color: #555; margin-bottom: 4px; }
+    select, input[type=file] { width: 100%; padding: 7px; border: 1px solid #ccc; border-radius: 6px; font-size: 0.95rem; }
+    button { font-size: 1rem; padding: 10px 22px; border: none; border-radius: 6px;
+      background: #2563eb; color: white; cursor: pointer; }
     button:disabled { background: #9db8f0; cursor: not-allowed; }
-    .result {
-      margin-top: 24px;
-      padding: 16px;
-      border-radius: 8px;
-      background: #f5f5f5;
-      display: none;
-    }
-    .bar-row { display: flex; align-items: center; margin: 6px 0; gap: 8px; }
-    .bar-label { width: 190px; font-size: 0.9rem; }
-    .bar-track { flex: 1; background: #e0e0e0; border-radius: 4px; height: 16px; }
-    .bar-fill { background: #2563eb; height: 16px; border-radius: 4px; }
-    .bar-value { width: 52px; text-align: right; font-variant-numeric: tabular-nums; font-size: 0.85rem; }
-    .top-diagnosis { font-size: 1.1rem; font-weight: 600; margin-bottom: 12px; }
-    .error { color: #b91c1c; margin-top: 12px; }
-    footer { margin-top: 40px; font-size: 0.8rem; color: #888; }
+    .result { display: none; }
+    .result img { width: 100%; border: 1px solid #ddd; border-radius: 8px; }
+    .diagnosis { font-size: 1.15rem; font-weight: 600; margin: 6px 0; }
+    .conf { color: #444; }
+    .bar-row { display: flex; align-items: center; margin: 5px 0; gap: 8px; }
+    .bar-label { width: 190px; font-size: 0.88rem; }
+    .bar-track { flex: 1; background: #e6e6e6; border-radius: 4px; height: 15px; }
+    .bar-fill { background: #2563eb; height: 15px; border-radius: 4px; }
+    .bar-value { width: 52px; text-align: right; font-size: 0.82rem; font-variant-numeric: tabular-nums; }
+    .error { color: #b91c1c; margin-top: 10px; }
+    footer { margin-top: 32px; font-size: 0.8rem; color: #888; }
   </style>
 </head>
 <body>
   <h1>ECG AI Assistant</h1>
 
   <div class="disclaimer">
-    <strong>⚠️ Это не медицинское изделие.</strong>
-    Инструмент носит учебный и исследовательский характер. Результаты
-    не являются медицинским заключением и не должны использоваться для
-    постановки диагноза, назначения лечения или принятия клинических решений.
-    По любым вопросам о здоровье обращайтесь к врачу.
+    <strong>⚠️ Это не медицинское изделие.</strong> Учебный инструмент. Результаты
+    не являются медицинским заключением. По вопросам здоровья обращайтесь к врачу.
   </div>
 
-  <div class="upload-box">
-    <p>Загрузите изображение ЭКГ (jpg, png, pdf)</p>
-    <input type="file" id="ecg-file" accept="image/*,application/pdf" />
-    <p><button id="upload-btn" disabled>Отправить на распознавание</button></p>
+  <div class="card">
+    <p><strong>1.</strong> Загрузите фотографию бумажной ЭКГ и укажите параметры записи:</p>
+    <input type="file" id="ecg-file" accept="image/*" />
+
+    <div class="params">
+      <div>
+        <label>Формат</label>
+        <select id="layout">
+          <option value="3x4">3×4 (+ритм)</option>
+          <option value="6x2">6×2</option>
+          <option value="12x1" selected>12×1</option>
+        </select>
+      </div>
+      <div>
+        <label>Скорость, мм/с</label>
+        <select id="speed"><option value="25" selected>25</option><option value="50">50</option></select>
+      </div>
+      <div>
+        <label>Усиление, мм/мВ</label>
+        <select id="gain"><option value="5">5</option><option value="10" selected>10</option><option value="20">20</option></select>
+      </div>
+    </div>
+
+    <p><button id="go" disabled>Оцифровать и проанализировать</button></p>
+    <div class="error" id="error"></div>
   </div>
 
-  <div class="result" id="result">
-    <h2>Результат</h2>
-    <div class="top-diagnosis" id="top-diagnosis"></div>
-    <div id="bars"></div>
-    <p id="meta" style="font-size:0.8rem;color:#666;"></p>
+  <div class="card result" id="result">
+    <div class="diagnosis" id="diagnosis"></div>
+    <div class="conf" id="conf"></div>
+    <div id="bars" style="margin:12px 0;"></div>
+    <p><strong>Заново отрисованная цифровая ЭКГ</strong> (построена из восстановленного сигнала, не фото):</p>
+    <img id="clean-ecg" alt="цифровая ЭКГ" />
+    <p style="font-size:0.8rem;color:#666;" id="meta"></p>
   </div>
 
-  <div class="error" id="error"></div>
-
-  <footer>
-    ECG AI Assistant · учебный проект · версия 0.1.0
-  </footer>
+  <footer>ECG AI Assistant · учебный проект · версия 0.2.0</footer>
 
   <script>
-    // Человекочитаемые названия классов диагнозов (совпадают с бэкендом).
-    const DIAGNOSIS_LABELS = {
-      NORM: "Норма",
-      MI: "Инфаркт миокарда",
-      STTC: "Изменения ST/T",
-      CD: "Нарушение проводимости",
-      HYP: "Гипертрофия",
-    };
-
-    const fileInput = document.getElementById("ecg-file");
-    const uploadBtn = document.getElementById("upload-btn");
-    const resultBox = document.getElementById("result");
+    const LABELS = { NORM:"Норма", MI:"Инфаркт миокарда", STTC:"Изменения ST/T",
+      CD:"Нарушение проводимости", HYP:"Гипертрофия" };
+    const file = document.getElementById("ecg-file");
+    const go = document.getElementById("go");
     const errorBox = document.getElementById("error");
+    const resultBox = document.getElementById("result");
 
-    // Кнопка активна только когда выбран файл.
-    fileInput.addEventListener("change", () => {
-      uploadBtn.disabled = !fileInput.files.length;
-    });
+    file.addEventListener("change", () => { go.disabled = !file.files.length; });
 
-    uploadBtn.addEventListener("click", async () => {
-      errorBox.textContent = "";
-      resultBox.style.display = "none";
-      uploadBtn.disabled = true;
-      uploadBtn.textContent = "Обрабатываем…";
-
+    go.addEventListener("click", async () => {
+      errorBox.textContent = ""; resultBox.style.display = "none";
+      go.disabled = true; go.textContent = "Обрабатываем…";
       try {
-        const formData = new FormData();
-        formData.append("file", fileInput.files[0]);
-
-        const resp = await fetch("/recordings", { method: "POST", body: formData });
+        const fd = new FormData();
+        fd.append("file", file.files[0]);
+        fd.append("layout", document.getElementById("layout").value);
+        fd.append("speed", document.getElementById("speed").value);
+        fd.append("gain", document.getElementById("gain").value);
+        const resp = await fetch("/recordings", { method: "POST", body: fd });
         if (!resp.ok) {
-          throw new Error("Сервер вернул ошибку " + resp.status);
+          const t = await resp.text();
+          throw new Error("Сервер вернул " + resp.status + ": " + t);
         }
-        const data = await resp.json();
-        renderResult(data);
+        render(await resp.json());
       } catch (e) {
         errorBox.textContent = "Ошибка: " + e.message;
       } finally {
-        uploadBtn.disabled = false;
-        uploadBtn.textContent = "Отправить на распознавание";
+        go.disabled = false; go.textContent = "Оцифровать и проанализировать";
       }
     });
 
-    function renderResult(data) {
-      const pred = data.prediction;
-      const rec = data.recording;
+    function render(data) {
+      const pred = data.prediction, rec = data.recording;
+      const topLabel = LABELS[pred.diagnosis] || pred.diagnosis;
+      document.getElementById("diagnosis").textContent = "Наиболее вероятно: " + topLabel;
+      document.getElementById("conf").textContent =
+        "Уверенность: " + (data.confidence * 100).toFixed(1) + "%";
 
-      const topLabel = DIAGNOSIS_LABELS[pred.diagnosis] || pred.diagnosis;
-      document.getElementById("top-diagnosis").textContent =
-        "Наиболее вероятно: " + topLabel;
-
-      // Сортируем вероятности по убыванию и рисуем полоски.
       const entries = Object.entries(pred.probabilities).sort((a, b) => b[1] - a[1]);
-      const bars = entries.map(([code, prob]) => {
-        const label = DIAGNOSIS_LABELS[code] || code;
-        const pct = (prob * 100).toFixed(1);
-        return `
-          <div class="bar-row">
-            <div class="bar-label">${label}</div>
-            <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
-            <div class="bar-value">${pct}%</div>
-          </div>`;
+      document.getElementById("bars").innerHTML = entries.map(([code, p]) => {
+        const pct = (p * 100).toFixed(1);
+        return `<div class="bar-row"><div class="bar-label">${LABELS[code] || code}</div>
+          <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
+          <div class="bar-value">${pct}%</div></div>`;
       }).join("");
-      document.getElementById("bars").innerHTML = bars;
 
+      document.getElementById("clean-ecg").src = data.render_url + "?t=" + Date.now();
       document.getElementById("meta").textContent =
-        `Модель: ${pred.model_version} · запись #${rec.id} · ` +
-        `${rec.sampling_rate} Гц · ${rec.duration} c`;
-
+        `Формат ${rec.layout} · ${rec.speed} мм/с · ${rec.gain} мм/мВ · ` +
+        `${rec.sampling_rate} Гц · модель ${pred.model_version} · запись #${rec.id}`;
       resultBox.style.display = "block";
     }
   </script>

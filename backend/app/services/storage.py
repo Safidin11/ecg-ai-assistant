@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import tempfile
 import uuid
 from pathlib import Path
 
@@ -20,18 +21,23 @@ def _ensure_dir(path: str) -> Path:
     return p
 
 
-def save_image(content: bytes, original_filename: str) -> str:
-    """Сохраняет загруженную картинку ЭКГ на диск.
+def save_temp_image(content: bytes, original_filename: str) -> str:
+    """Сохраняет загруженную картинку ВРЕМЕННО (для обработки).
 
-    Возвращает путь к сохранённому файлу.
+    Изображение в проекте не хранится — этот файл нужно удалить после оцифровки.
     """
-    images_dir = _ensure_dir(settings.images_storage_path)
-    # сохраняем расширение исходного файла (.jpg/.png/...), имя делаем уникальным
     suffix = Path(original_filename).suffix or ".bin"
-    filename = f"{uuid.uuid4().hex}{suffix}"
-    file_path = images_dir / filename
-    file_path.write_bytes(content)
-    return str(file_path)
+    fd, path = tempfile.mkstemp(suffix=suffix, prefix="ecg_upload_")
+    with open(fd, "wb") as f:
+        f.write(content)
+    return path
+
+
+def new_render_path() -> tuple[str, str]:
+    """Возвращает (полный_путь, имя_файла) для сохранения отрисованной ЭКГ."""
+    renders_dir = _ensure_dir(settings.renders_storage_path)
+    filename = f"{uuid.uuid4().hex}.png"
+    return str(renders_dir / filename), filename
 
 
 def save_signal(signal: np.ndarray) -> str:

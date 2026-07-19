@@ -8,13 +8,19 @@ from __future__ import annotations
 
 from typing import Protocol
 
+import numpy as np
+
 from ecg_layout.types import TextDetection
 
 
 class OCRBackend(Protocol):
-    """Любой OCR должен уметь одно: по пути к картинке вернуть куски текста."""
+    """Любой OCR должен уметь: по пути к картинке или по картинке в памяти
+    вернуть куски текста."""
 
     def detect(self, image_path: str) -> list[TextDetection]:
+        ...
+
+    def detect_image(self, image) -> list[TextDetection]:
         ...
 
 
@@ -31,6 +37,9 @@ class FakeOCRBackend:
     def detect(self, image_path: str) -> list[TextDetection]:
         return list(self._detections)
 
+    def detect_image(self, image) -> list[TextDetection]:
+        return list(self._detections)
+
 
 class EasyOCRBackend:
     """Реальный OCR на базе EasyOCR (нейросетевой, качественнее Tesseract).
@@ -39,14 +48,16 @@ class EasyOCRBackend:
     когда бэкенд реально создаётся.
     """
 
+    # Настройки, подобранные на реальных ЭКГ: увеличение картинки и повышенная
+    # чувствительность помогают читать мелкие/тонкие подписи отведений.
+    _READ_PARAMS = dict(mag_ratio=2.0, min_size=3, text_threshold=0.4, low_text=0.3)
+
     def __init__(self, languages: list[str] | None = None, gpu: bool = False):
         import easyocr  # ленивый импорт
 
         self._reader = easyocr.Reader(languages or ["en"], gpu=gpu)
 
-    def detect(self, image_path: str) -> list[TextDetection]:
-        # readtext возвращает [(bbox_из_4_точек, текст, уверенность), ...]
-        results = self._reader.readtext(image_path)
+    def _parse(self, results) -> list[TextDetection]:
         detections: list[TextDetection] = []
         for box, text, conf in results:
             xs = [float(p[0]) for p in box]
@@ -57,3 +68,11 @@ class EasyOCRBackend:
                 TextDetection(text=text, x=x, y=y, w=w, h=h, conf=float(conf))
             )
         return detections
+
+    def detect(self, image_path: str) -> list[TextDetection]:
+        return self._parse(self._reader.readtext(image_path, **self._READ_PARAMS))
+
+    def detect_image(self, image) -> list[TextDetection]:
+        """OCR для картинки в памяти (PIL.Image или numpy-массив)."""
+        arr = np.asarray(image)
+        return self._parse(self._reader.readtext(arr, **self._READ_PARAMS))

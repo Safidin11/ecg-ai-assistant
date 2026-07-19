@@ -8,12 +8,23 @@ from __future__ import annotations
 import argparse
 import json
 
-from ecg_layout.complete import complete_layout
+from ecg_layout.baselines import detect_n_rows, standard_format_from_rows
+from ecg_layout.complete import assemble_from_format, complete_layout
 from ecg_layout.infer import infer_layout
 from ecg_layout.matching import match_text_to_lead
 from ecg_layout.ocr import OCRBackend
+from ecg_layout.preprocess import mask_to_image, remove_grid
 from ecg_layout.templates import build_layout_from_template
 from ecg_layout.types import LayoutMap, LeadLabel
+
+# Синонимы форматов для ручного override.
+_OVERRIDE_TO_TEMPLATE = {
+    "3x4": "standard_3x4",
+    "3x4_rhythm": "standard_3x4",
+    "3x4_no_rhythm": "standard_3x4_no_rhythm",
+    "6x2": "standard_6x2",
+    "12x1": "standard_12x1",
+}
 
 
 def _image_size(image_path: str) -> tuple[int, int]:
@@ -24,26 +35,15 @@ def _image_size(image_path: str) -> tuple[int, int]:
         return im.width, im.height
 
 
-def detect_layout(
-    image_path: str,
-    ocr: OCRBackend,
-    total_seconds: float = 10.0,
-    image_size: tuple[int, int] | None = None,
-    fallback_template: str = "standard_3x4",
-    min_leads: int = 8,
-    complete: bool = True,
-) -> LayoutMap:
-    """Полный проход: OCR -> отбор подписей -> инференс раскладки.
+def _resolve_override(value: str) -> str:
+    """Приводит ручной формат ('3x4', '12x1'…) к имени шаблона."""
+    key = value.strip().lower()
+    if key in _OVERRIDE_TO_TEMPLATE:
+        return _OVERRIDE_TO_TEMPLATE[key]
+    return value  # уже имя шаблона
 
-    Если OCR прочитал < min_leads отведений (подписей нет/плохо распознались),
-    откатываемся на известную раскладку fallback_template. В обоих случаях в
-    поле layout.source видно, откуда взялся результат.
 
-    complete=True: если прочитанная раскладка совпала со стандартной, пропущенные
-    отведения достраиваются по шаблону (помечаются inferred=True).
-    """
-    detections = ocr.detect(image_path)
-
+def _match_labels(detections):
     labels: list[LeadLabel] = []
     unmatched = []
     for det in detections:
@@ -61,15 +61,69 @@ def detect_layout(
                 source_text=det.text,
             )
         )
+    return labels, unmatched
 
+
+def detect_layout(
+    image_path: str,
+    ocr: OCRBackend,
+    total_seconds: float = 10.0,
+    image_size: tuple[int, int] | None = None,
+    fallback_template: str = "standard_3x4",
+    min_leads: int = 8,
+    complete: bool = True,
+    layout_override: str | None = None,
+    use_grid_removal: bool = True,
+) -> LayoutMap:
+    """Картинка -> раскладка ЭКГ.
+
+    Порядок определения формата:
+      1. layout_override ('3x4' / '6x2' / '12x1') — если задан вручную.
+      2. Число строк по сигналу (удаляем сетку -> считаем полосы отведений).
+         Формат почти однозначно следует из числа строк.
+      3. Иначе — инференс по подписям OCR (+ достройка).
+
+    В поле layout.source видно, как определён формат. Прочитанные OCR отведения
+    помечены inferred=False, достроенные по формату — inferred=True.
+    """
     if image_size is None:
         image_size = _image_size(image_path)
     width, height = image_size
 
-    layout = infer_layout(labels, image_w=width, image_h=height, total_seconds=total_seconds)
+    # 1. Препроцессинг: убираем сетку -> чище OCR + считаем строки по сигналу.
+    n_rows = None
+    detections = None
+    if use_grid_removal:
+        try:
+            mask = remove_grid(image_path)
+            detections = ocr.detect_image(mask_to_image(mask))
+            n_rows = detect_n_rows(mask)
+        except Exception:
+            detections = None
+    if detections is None:
+        detections = ocr.detect(image_path)
+
+    labels, unmatched = _match_labels(detections)
     ocr_matched = sorted({lb.lead for lb in labels})
 
-    # Достаточно ли уверенно прочитали подписи?
+    # 2. Формат: override -> по строкам -> иначе инференс по подписям.
+    template = None
+    source_prefix = ""
+    if layout_override:
+        template = _resolve_override(layout_override)
+        source_prefix = "override:"
+    elif n_rows is not None:
+        template = standard_format_from_rows(n_rows)["template"]
+        source_prefix = f"baseline({n_rows}rows):"
+
+    if template is not None:
+        layout = assemble_from_format(template, width, height, total_seconds, labels)
+        layout.unmatched = unmatched
+        layout.source = f"{source_prefix}{template}"
+        return layout
+
+    # 3. Нет ни override, ни строк -> старый путь по подписям.
+    layout = infer_layout(labels, image_w=width, image_h=height, total_seconds=total_seconds)
     if len(layout.leads_found) >= min_leads:
         layout.source = "ocr"
         layout.unmatched = unmatched
@@ -78,7 +132,6 @@ def detect_layout(
             layout = complete_layout(layout, width, height)
         return layout
 
-    # Иначе — запасной вариант: известный шаблон (но что прочитал OCR — сохраняем).
     fallback = build_layout_from_template(fallback_template, width, height, total_seconds)
     fallback.unmatched = unmatched
     fallback.ocr_matched_leads = ocr_matched
@@ -118,6 +171,10 @@ def main() -> None:
                         help="шаблон-запасной вариант, если OCR не справился")
     parser.add_argument("--min-leads", type=int, default=8,
                         help="сколько отведений должен прочитать OCR, чтобы ему доверять")
+    parser.add_argument("--layout", default=None,
+                        help="задать формат вручную: 3x4 / 6x2 / 12x1 (иначе определяется сам)")
+    parser.add_argument("--no-grid-removal", action="store_true",
+                        help="не удалять сетку и не определять формат по сигналу")
     args = parser.parse_args()
 
     from ecg_layout.ocr import EasyOCRBackend
@@ -126,6 +183,7 @@ def main() -> None:
     layout = detect_layout(
         args.image, ocr=ocr, total_seconds=args.seconds,
         fallback_template=args.fallback, min_leads=args.min_leads,
+        layout_override=args.layout, use_grid_removal=not args.no_grid_removal,
     )
 
     print(f"Источник раскладки: {layout.source}")

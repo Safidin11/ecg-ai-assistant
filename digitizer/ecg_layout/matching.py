@@ -59,9 +59,14 @@ def match_text_to_lead(text: str) -> tuple[str | None, float]:
     if norm in _NORM_TO_CANON:
         return _NORM_TO_CANON[norm], 100.0
 
-    # Augmented-отведение по хвосту "V[RLF]" при испорченной первой букве.
+    # Augmented-отведение по хвосту "V[RLF]":
+    #  - 3 символа "?V[RLF]": испорчена первая буква (oVL, GVF)
+    #  - 2 символа "V[RLF]": потеряна первая буква 'a' (VR, VL, VF)
+    # Различающая информация (R/L/F) сохраняется в обоих случаях.
     if len(norm) == 3 and norm[1] == "V" and norm[2] in "RLF":
         return _AUG_SUFFIX[norm[1:]], 90.0
+    if len(norm) == 2 and norm[0] == "V" and norm[1] in "RLF":
+        return _AUG_SUFFIX[norm], 88.0
 
     # Иначе — ближайшее по расстоянию редактирования из закрытого словаря.
     best = process.extractOne(norm, _CANON_KEYS, scorer=fuzz.ratio)

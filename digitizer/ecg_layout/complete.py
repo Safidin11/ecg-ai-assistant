@@ -12,13 +12,49 @@ from __future__ import annotations
 
 from ecg_layout.templates import (
     LAYOUT_TEMPLATES,
+    build_layout_from_template,
     template_cell_map,
     template_grid_dims,
 )
-from ecg_layout.types import LayoutMap, LeadCell
+from ecg_layout.types import LayoutMap, LeadCell, LeadLabel
 
 # Минимум прочитанных клеток, чтобы доверять совпадению с шаблоном.
 _MIN_MATCH = 4
+
+
+def assemble_from_format(
+    template_name: str,
+    image_w: float,
+    image_h: float,
+    total_seconds: float,
+    read_labels: list[LeadLabel],
+) -> LayoutMap:
+    """Собирает полную раскладку из известного формата.
+
+    Формат (число строк/колонок) берётся из шаблона — обычно он определён по
+    сигналу (детекция строк) или задан вручную. Все 12 отведений расставляются
+    по шаблону; те, что реально прочитал OCR, помечаются как прочитанные
+    (inferred=False, с их рамкой), остальные — как достроенные (inferred=True).
+    """
+    layout = build_layout_from_template(template_name, image_w, image_h, total_seconds)
+
+    read_by_lead: dict[str, LeadLabel] = {}
+    for lb in read_labels:
+        read_by_lead.setdefault(lb.lead, lb)
+
+    for cell in layout.cells:
+        lb = read_by_lead.get(cell.lead)
+        if lb is not None:
+            cell.inferred = False
+            cell.conf = lb.conf
+            cell.bbox = lb.bbox
+        else:
+            cell.inferred = True
+            cell.conf = 0.0
+
+    layout.ocr_matched_leads = sorted(read_by_lead.keys())
+    layout.source = f"format:{template_name}"
+    return layout
 
 
 def complete_layout(layout: LayoutMap, image_w: float, image_h: float) -> LayoutMap:

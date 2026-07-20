@@ -53,9 +53,9 @@ def run_stages(file: UploadFile = File(..., description="Фото ЭКГ")) -> d
     if proc.returncode != 0:
         raise HTTPException(status_code=500, detail=f"Пайплайн упал:\n{proc.stderr[-800:]}")
 
-    # строки лога этапов (начинаются с s1.., s2.. и т.д.)
+    # строки лога этапов (вида "sN_...: ...")
     log = [ln.strip() for ln in proc.stdout.splitlines()
-           if ln.strip().startswith(("s1_", "s2_", "s3_", "s4_", "s5_", "s6_"))]
+           if ln.strip()[:1] == "s" and ln.strip()[1:2].isdigit()]
 
     images = sorted(out_dir.glob("*.png"))
     stages = [{"name": p.stem, "url": f"/stage-debug/{job}/{p.name}"} for p in images]

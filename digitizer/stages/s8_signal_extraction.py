@@ -33,15 +33,20 @@ def _column_runs(rows: np.ndarray) -> list[tuple[int, int]]:
     return runs
 
 
-def _track(mask: np.ndarray, box: tuple[int, int, int, int], baseline: int) -> np.ndarray:
+def _track(mask: np.ndarray, box: tuple[int, int, int, int], baseline: int,
+           max_jump_frac: float = 0.22) -> np.ndarray:
     """Следит за кривой по столбцам, выбирая сегмент, ближайший к предыдущему.
 
+    Прыжок дальше max_jump_frac от высоты полосы считаем артефактом (вертикальная
+    чёрточка, калибровочный импульс, граница колонки) и пропускаем — точка потом
+    интерполируется. Настоящий зубец растёт плавно и не отбрасывается.
     Возвращает отклонение от базовой линии в пикселях (вверх = положительно).
     """
     l, t, r, b = box
     sub = mask[t:b, l:r]
-    n = sub.shape[1]
+    height, n = sub.shape
     base = baseline - t
+    max_jump = max_jump_frac * height
     prev = float(base)
     dev = np.full(n, np.nan, dtype=np.float32)
     for x in range(n):
@@ -51,9 +56,16 @@ def _track(mask: np.ndarray, box: tuple[int, int, int, int], baseline: int) -> n
         runs = _column_runs(idx)
         centers = np.array([(lo + hi) / 2.0 for lo, hi in runs])
         y = float(centers[int(np.argmin(np.abs(centers - prev)))])
+        if abs(y - prev) > max_jump:                 # слишком далеко — артефакт, пропускаем
+            continue
         prev = y
         dev[x] = base - y                            # вверх = положительно
-    return np.nan_to_num(fill_gaps(dev)).astype(np.float32)
+
+    dev = fill_gaps(dev)
+    dev = dev - np.nanmedian(dev)                     # центрируем по изолинии (убираем DC)
+    cap = 1.5 * height                                # режем только грубые артефакты, не зубцы
+    dev = np.clip(dev, -cap, cap)
+    return np.nan_to_num(dev).astype(np.float32)
 
 
 def run(ctx: StageContext) -> StageContext:

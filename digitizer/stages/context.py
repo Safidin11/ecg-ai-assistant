@@ -24,6 +24,12 @@ class StageContext:
     # s4 vertical_anchors
     row_bounds: list[tuple[int, int]] | None = None  # (верх, низ) каждого отведения
 
+    # s5 lead_name_detection
+    lead_labels: list[dict] | None = None            # [{lead, cx, cy, bbox}]
+
+    # s6 horizontal_anchors
+    col_bounds: list[tuple[int, int]] | None = None  # (лево, право) каждой колонки
+
     log: list[str] = field(default_factory=list)
 
     def note(self, msg: str) -> None:

@@ -16,15 +16,19 @@ from stages import (
     s2_baseline_detection,
     s3_configuration,
     s4_vertical_anchors,
+    s5_lead_name_detection,
+    s6_horizontal_anchors,
 )
 from stages.context import StageContext
 
-# Порядок этапов: (модуль, порядковый номер для имени файла).
+# Порядок этапов (каждый сохраняет свою debug-картинку).
 STAGES = [
     s1_preprocess,
     s2_baseline_detection,
     s3_configuration,
     s4_vertical_anchors,
+    s5_lead_name_detection,
+    s6_horizontal_anchors,
 ]
 
 

@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.api.recordings import router as recordings_router
+from app.api.stages import router as stages_router
 from app.core.config import settings
 from app.db.base import Base
 from app.db.session import engine
@@ -27,6 +28,7 @@ app.add_middleware(
 )
 
 app.include_router(recordings_router)
+app.include_router(stages_router)
 
 
 @app.on_event("startup")
@@ -49,6 +51,10 @@ def health() -> dict:
 # Отдаём отрисованные чистые ЭКГ по адресу /renders/<файл>.
 Path(settings.renders_storage_path).mkdir(parents=True, exist_ok=True)
 app.mount("/renders", StaticFiles(directory=settings.renders_storage_path), name="renders")
+
+# Отдаём debug-картинки этапов нового пайплайна по адресу /stage-debug/<...>.
+Path(settings.stage_debug_path).mkdir(parents=True, exist_ok=True)
+app.mount("/stage-debug", StaticFiles(directory=settings.stage_debug_path), name="stage-debug")
 
 # Отдаём фронтенд (frontend/index.html) прямо из приложения по адресу "/".
 # Монтируем ПОСЛЕ API-роутов, чтобы /health и /recordings имели приоритет.

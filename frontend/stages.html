@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ECG — поэтапная оцифровка (новый пайплайн)</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+      max-width: 900px; margin: 28px auto; padding: 0 16px; color: #1a1a1a; line-height: 1.5; }
+    h1 { font-size: 1.35rem; }
+    .disclaimer { background: #fff3cd; border: 1px solid #ffe08a; border-radius: 8px;
+      padding: 10px 14px; margin-bottom: 18px; font-size: 0.88rem; }
+    .card { border: 1px solid #e2e2e2; border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+    input[type=file] { padding: 6px; }
+    button { font-size: 1rem; padding: 9px 20px; border: none; border-radius: 6px;
+      background: #2563eb; color: white; cursor: pointer; }
+    button:disabled { background: #9db8f0; cursor: not-allowed; }
+    .stage { border: 1px solid #e6e6e6; border-radius: 10px; margin: 14px 0; overflow: hidden; }
+    .stage h3 { margin: 0; padding: 10px 14px; background: #f5f7fb; font-size: 0.98rem; }
+    .stage .logline { padding: 6px 14px; font-size: 0.85rem; color: #555; background: #fafafa; }
+    .stage img { width: 100%; display: block; }
+    .error { color: #b91c1c; margin-top: 10px; white-space: pre-wrap; }
+    .muted { color: #777; font-size: 0.85rem; }
+    #status { margin-top: 10px; color: #2563eb; }
+  </style>
+</head>
+<body>
+  <h1>Поэтапная оцифровка ЭКГ <span class="muted">(новый пайплайн, s1–s6)</span></h1>
+
+  <div class="disclaimer">
+    <strong>⚠️ Не медицинское изделие.</strong> Это инструмент разработчика: показывает,
+    как машина находит отведения на фото по шагам. Диагноза здесь нет — только локализация.
+  </div>
+
+  <div class="card">
+    <p>Загрузи фото ЭКГ — прогоним по этапам и покажем результат каждого:</p>
+    <input type="file" id="file" accept="image/*" />
+    <p><button id="go" disabled>Прогнать по этапам</button></p>
+    <div id="status"></div>
+    <div class="error" id="error"></div>
+    <p class="muted">Первый прогон занимает ~30–60 сек (этап s5 распознаёт подписи).</p>
+  </div>
+
+  <div id="results"></div>
+
+  <script>
+    const STAGE_TITLES = {
+      s1_preprocess: "1. Препроцессинг — убрать сетку и рамку",
+      s2_baseline_detection: "2. Базовые линии — где изолиния каждого отведения",
+      s3_configuration: "3. Конфигурация — сколько строк (формат)",
+      s4_vertical_anchors: "4. Вертикальные якоря — верх/низ каждого отведения",
+      s5_lead_name_detection: "5. Подписи отведений (OCR)",
+      s6_horizontal_anchors: "6. Горизонтальные якоря — границы колонок",
+    };
+    const file = document.getElementById("file");
+    const go = document.getElementById("go");
+    const statusEl = document.getElementById("status");
+    const errorEl = document.getElementById("error");
+    const results = document.getElementById("results");
+
+    file.addEventListener("change", () => { go.disabled = !file.files.length; });
+
+    go.addEventListener("click", async () => {
+      errorEl.textContent = ""; results.innerHTML = "";
+      go.disabled = true; go.textContent = "Обрабатываем…";
+      statusEl.textContent = "Прогоняем по этапам (может занять до минуты)…";
+      try {
+        const fd = new FormData();
+        fd.append("file", file.files[0]);
+        const resp = await fetch("/stages/run", { method: "POST", body: fd });
+        if (!resp.ok) throw new Error(await resp.text());
+        const data = await resp.json();
+        render(data);
+        statusEl.textContent = "Готово: " + data.stages.length + " этапов.";
+      } catch (e) {
+        errorEl.textContent = "Ошибка: " + e.message;
+        statusEl.textContent = "";
+      } finally {
+        go.disabled = false; go.textContent = "Прогнать по этапам";
+      }
+    });
+
+    function render(data) {
+      const logByStage = {};
+      (data.log || []).forEach(l => {
+        const name = l.split(":")[0];
+        logByStage[name] = l;
+      });
+      results.innerHTML = data.stages.map(s => {
+        const title = STAGE_TITLES[s.name] || s.name;
+        const log = logByStage[s.name] || "";
+        return `<div class="stage">
+          <h3>${title}</h3>
+          ${log ? `<div class="logline">${log}</div>` : ""}
+          <img src="${s.url}?t=${Date.now()}" alt="${s.name}" />
+        </div>`;
+      }).join("");
+    }
+  </script>
+</body>
+</html>

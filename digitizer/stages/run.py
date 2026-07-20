@@ -18,6 +18,10 @@ from stages import (
     s4_vertical_anchors,
     s5_lead_name_detection,
     s6_horizontal_anchors,
+    s7_lead_crop,
+    s8_signal_extraction,
+    s9_calibration,
+    s10_assemble,
 )
 from stages.context import StageContext
 
@@ -29,6 +33,10 @@ STAGES = [
     s4_vertical_anchors,
     s5_lead_name_detection,
     s6_horizontal_anchors,
+    s7_lead_crop,
+    s8_signal_extraction,
+    s9_calibration,
+    s10_assemble,
 ]
 
 

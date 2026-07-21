@@ -20,10 +20,20 @@ NAME = "s6_horizontal_anchors"
 
 
 def _content_x_range(mask: np.ndarray) -> tuple[int, int]:
-    cols = np.where(mask.any(axis=0))[0]
-    if len(cols) == 0:
-        return 0, mask.shape[1]
-    return int(cols[0]), int(cols[-1])
+    """Левый/правый край СИГНАЛА: пропускаем сплошные столбцы (рамка) и пустые."""
+    w = mask.shape[1]
+    col_ink = mask.mean(axis=0)
+    solid, empty = 0.5, 0.003          # рамка почти сплошная; пусто — почти нет чернил
+    left = 0
+    while left < w and (col_ink[left] > solid or col_ink[left] < empty):
+        left += 1
+    right = w - 1
+    while right > left and (col_ink[right] > solid or col_ink[right] < empty):
+        right -= 1
+    if right <= left:
+        cols = np.where(mask.any(axis=0))[0]
+        return (int(cols[0]), int(cols[-1])) if len(cols) else (0, w)
+    return int(left), int(right)
 
 
 def run(ctx: StageContext) -> StageContext:

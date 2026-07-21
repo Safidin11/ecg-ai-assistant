@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ECG — оцифровка по формату (модульная архитектура)</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+      max-width: 900px; margin: 28px auto; padding: 0 16px; color: #1a1a1a; line-height: 1.5; }
+    h1 { font-size: 1.35rem; }
+    .disclaimer { background: #fff3cd; border: 1px solid #ffe08a; border-radius: 8px;
+      padding: 10px 14px; margin-bottom: 18px; font-size: 0.88rem; }
+    .card { border: 1px solid #e2e2e2; border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+    .row { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin: 10px 0; }
+    select { padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 0.95rem; }
+    input[type=file] { padding: 6px; }
+    button { font-size: 1rem; padding: 9px 20px; border: none; border-radius: 6px;
+      background: #2563eb; color: white; cursor: pointer; }
+    button:disabled { background: #9db8f0; cursor: not-allowed; }
+    #result img { width: 100%; border: 1px solid #ddd; border-radius: 8px; margin-top: 8px; }
+    .error { color: #b91c1c; margin-top: 10px; white-space: pre-wrap; }
+    .muted { color: #777; font-size: 0.85rem; }
+    #status { margin-top: 10px; color: #2563eb; }
+    .logline { font-size: 0.85rem; color: #555; background: #fafafa; border: 1px solid #eee;
+      border-radius: 6px; padding: 8px 10px; margin-top: 10px; }
+    .logline div { padding: 2px 0; }
+    .stat { font-weight: 600; margin-top: 6px; }
+  </style>
+</head>
+<body>
+  <h1>Оцифровка ЭКГ по формату <span class="muted">(независимые пайплайны)</span></h1>
+
+  <div class="disclaimer">
+    <strong>⚠️ Не медицинское изделие.</strong> Учебный инструмент — только оцифровка,
+    без диагноза.
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <div>
+        <label class="muted">Формат ЭКГ</label><br/>
+        <select id="layout">
+          <option value="12x1">12×1 (эталонный пайплайн)</option>
+          <option value="3x4">3×4</option>
+        </select>
+      </div>
+      <div>
+        <label class="muted">Фото ЭКГ</label><br/>
+        <input type="file" id="file" accept="image/*" />
+      </div>
+    </div>
+    <p><button id="go" disabled>Оцифровать</button></p>
+    <div id="status"></div>
+    <div class="error" id="error"></div>
+    <p class="muted">Первый прогон занимает ~30–60 сек (распознавание подписей отведений).</p>
+  </div>
+
+  <div class="card" id="result" style="display:none;">
+    <div class="stat" id="stat"></div>
+    <div class="logline" id="log"></div>
+    <img id="render" alt="цифровая ЭКГ" />
+  </div>
+
+  <script>
+    const file = document.getElementById("file");
+    const go = document.getElementById("go");
+    const statusEl = document.getElementById("status");
+    const errorEl = document.getElementById("error");
+    const resultEl = document.getElementById("result");
+
+    file.addEventListener("change", () => { go.disabled = !file.files.length; });
+
+    go.addEventListener("click", async () => {
+      errorEl.textContent = ""; resultEl.style.display = "none";
+      go.disabled = true; go.textContent = "Обрабатываем…";
+      statusEl.textContent = "Оцифровываем (может занять до минуты)…";
+      try {
+        const fd = new FormData();
+        fd.append("file", file.files[0]);
+        fd.append("layout", document.getElementById("layout").value);
+        const resp = await fetch("/layouts/digitize", { method: "POST", body: fd });
+        if (!resp.ok) throw new Error(await resp.text());
+        const data = await resp.json();
+        render(data);
+        statusEl.textContent = "Готово.";
+      } catch (e) {
+        errorEl.textContent = "Ошибка: " + e.message;
+        statusEl.textContent = "";
+      } finally {
+        go.disabled = false; go.textContent = "Оцифровать";
+      }
+    });
+
+    function render(data) {
+      document.getElementById("stat").textContent =
+        `Формат: ${data.layout} · форма сигнала: [${data.shape.join(", ")}] · ` +
+        `отведений с данными: ${data.leads_with_data}/12`;
+      document.getElementById("log").innerHTML =
+        (data.log || []).map(l => `<div>${l}</div>`).join("");
+      document.getElementById("render").src = data.render_url + "?t=" + Date.now();
+      resultEl.style.display = "block";
+    }
+  </script>
+</body>
+</html>

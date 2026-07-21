@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.api.recordings import router as recordings_router
+from app.api.layouts import router as layouts_router
 from app.api.stages import router as stages_router
 from app.core.config import settings
 from app.db.base import Base
@@ -29,6 +30,7 @@ app.add_middleware(
 
 app.include_router(recordings_router)
 app.include_router(stages_router)
+app.include_router(layouts_router)
 
 
 @app.on_event("startup")

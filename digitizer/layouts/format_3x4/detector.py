@@ -110,8 +110,13 @@ def _columns_from_labels(labels, x0: int, x1: int) -> list[tuple[int, int]]:
 def detect(mask: np.ndarray, labels: list[dict]) -> Layout3x4:
     x0, y0, x1, y1 = _content_box(mask)
 
-    bands = _merge_close(detect_row_bands(mask))       # проверенная детекция + защита от переразбиения
-    proj = mask.sum(axis=1)
+    # Строки ищем ТОЛЬКО в области содержимого (без верхних/боковых полей и мусора),
+    # иначе подписи/остаток рамки склеивают строки.
+    content = mask[y0:y1, x0:x1]
+    bands = _merge_close(detect_row_bands(content))
+    bands = [(a + y0, b + y0) for a, b in bands]       # обратно в координаты картинки
+
+    proj = mask[:, x0:x1].sum(axis=1)                  # плотность по строкам внутри содержимого
     baselines = [int(a + int(np.argmax(proj[a:b]))) for a, b in bands]
 
     col_bounds = _columns_from_labels(labels, x0, x1)
